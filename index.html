@@ -4,307 +4,56 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monte Carlo Simulation for Scrum Velocity</title>
+    <!-- External CSS -->
+    <link rel="stylesheet" type="text/css" href="velocity.css">
+    <!-- External Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.0.2"></script>
-    <style>
-        body {
-            font-family: 'Montserrat', sans-serif;
-            margin: 40px;
-            background-color: #1b1b1eff; /* Eerie Black background */
-            color: #d8dbe2ff; /* Platinum text for readability */
-        }
-
-        h1 {
-            font-size: 24px;
-            color: #d8dbe2ff; /* Platinum for the heading */
-        }
-
-        label {
-            font-weight: bold;
-            color: #a9bcd0ff; /* Powder Blue for labels */
-        }
-
-        textarea, input {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            background-color: #373f51ff; /* Charcoal background for inputs */
-            color: #d8dbe2ff; /* Platinum text */
-            border: 1px solid #a9bcd0ff; /* Powder Blue border */
-            border-radius: 4px; /* Rounded corners */
-        }
-
-        input[type="checkbox"] {
-            transform: scale(1.3);
-            margin-right: 10px;
-        }
-
-        button {
-            padding: 10px 20px;
-            background-color: #58a4b0ff; /* Moonstone for buttons */
-            color: white;
-            border: none;
-            border-radius: 4px; /* Rounded button */
-            cursor: pointer;
-        }
-
-        button:hover {
-            background-color: #3d8891; /* Darker Moonstone on hover */
-        }
-
-        #results {
-            margin-top: 20px;
-            font-size: 18px;
-            color: #d8dbe2ff; /* Platinum for result text */
-        }
-
-        .form-container {
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        #chart-container {
-            width: 80%;
-            margin: 20px auto;
-            background-color: #373f51ff; /* Charcoal for chart container */
-            padding: 20px;
-            border-radius: 8px; /* Rounded container */
-        }
-
-        canvas {
-            max-width: 100%;
-            background-color: #1b1b1eff; /* Eerie Black background for the chart */
-            border: 1px solid #a9bcd0ff; /* Powder Blue border around the chart */
-        }
-
-        input[type="range"] {
-            width: 100%;
-        }
-
-        #sliderValue {
-            font-weight: bold;
-            color: #d8dbe2ff; /* Platinum for slider value */
-        }
-        #percentageSlider {
-            width: 100%;
-        }
-
-        .checkbox-container {
-            display: flex;
-            align-items: left;
-            justify-content: flex-start; /* Aligns the checkbox to the left */
-            margin-top: 10px;
-        }
-
-        .checkbox-container label {
-            margin-left: 5px;
-        }
-
-        #planningSuccessProbability {
-            margin-top: 10px;
-            font-size: 18px;
-            color: #58a4b0ff; /* Moonstone to highlight success probability */
-        }
-    </style>
 </head>
 <body>
 
 <h1>Monte Carlo Simulation for Scrum Team Velocity</h1>
 
 <label for="velocities">Enter historic velocities (comma-separated) or throughputs:</label>
-<textarea id="velocities" rows="4" placeholder="eg. 4,5,3,4,5,7" ></textarea>
+<textarea id="velocities" rows="4" placeholder="e.g., 4,5,3,4,5,7"></textarea>
+
+<label for="prodBacklog">How many units of work ar eremaining in your product backlog?</label>
+<input type="number" id="prodBacklog" value="45">
 
 <label for="planning">How many units of work are you planning for your next sprint?</label>
 <input type="number" id="planning" value="45">
 
-<label for="iterations">Enter number of simulations (e.g. 100000):</label>
+<label for="iterations">Enter number of simulations (e.g., 100000):</label>
 <input type="number" id="iterations" value="100000">
 
- <label for="percentageSlider">Select percentage: </label>
- <input type="range" id="percentageSlider" min="0" max="100" value="50" oninput="updateSliderValue()">
- <span id="sliderValue">50%</span>
+<label for="percentageSlider">Select percentage: </label>
+<input type="range" id="percentageSlider" min="0" max="100" value="85" oninput="updateSliderValue()">
+<span id="sliderValue">85%</span>
 
 <br><br>
 <div class="checkbox-container">
     <input type="checkbox" id="setZero">
-    <label for="setZero">Set minimum value to 0? (ie prevent negative velocity):</label>
+    <label for="setZero">Set minimum value to 0? (i.e., prevent negative velocity):</label>
 </div>
 <br><br>
 
 <button onclick="runMonteCarlo()">Run Simulation</button><br><br>
 
 <div id="planningSuccessProbability"></div>
-<div id="results"></div>
+<div id="sprintResults"></div>
+<div id="releaseResults"></div>
 
 <div id="chart-container">
     <canvas id="velocityChart"></canvas>
+    <canvas id="releaseChart"></canvas>
+
 </div>
+
 
 <div id="debug"></div>
 
-<script>
-    let chartInstance;
-
-    function updateSliderValue() {
-            var slider = document.getElementById('percentageSlider');
-            var sliderValue = document.getElementById('sliderValue');
-            sliderValue.innerText = slider.value + '%';
-        }
-    // Function to calculate mean of an array
-    function calculateMean(data) {
-        const sum = data.reduce((a, b) => a + b, 0);
-        return sum / data.length;
-    }
-
-    // Function to calculate standard deviation of an array
-    function calculateStandardDeviation(data) {
-        const mean = calculateMean(data);
-        const squareDiffs = data.map(value => Math.pow(value - mean, 2));
-        const avgSquareDiff = calculateMean(squareDiffs);
-        return Math.sqrt(avgSquareDiff);
-    }
-
-    // Box-Muller transform to generate normally distributed random numbers
-    function generateNormalRandom(mean, stdDev) {
-        let u1 = Math.random();
-        let u2 = Math.random();
-        let z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
-        return z0 * stdDev + mean;
-    }
-
-    function runMonteCarlo() {
-        const velocitiesInput = document.getElementById("velocities").value;
-        const iterations = parseInt(document.getElementById("iterations").value);
-        const velocities = velocitiesInput.split(',').map(Number).filter(v => !isNaN(v));
-        const percentageConfdence = (100 - document.getElementById("percentageSlider").value)/100;
-        const planningVelocity = parseInt(document.getElementById("planning").value);
-
-        var minVelocityIsZero = false;
-        
-        if (document.getElementById("setZero").checked){
-	    minVelocityIsZero = true;
-        }
-
-        if (velocities.length === 0 || iterations <= 0) {
-            document.getElementById("results").innerText = "Please provide valid velocities and a number of iterations.";
-            return;
-        }
-
-        // Calculate mean and standard deviation from the input velocities
-        const mean = calculateMean(velocities);
-        const stdDev = calculateStandardDeviation(velocities);
-
-        const simulatedResults = [];
-        var planningVelocityOrMore = 0;
-
-        // Generate random samples using normal distribution
-        for (let i = 0; i < iterations; i++) {
-            randomSample = generateNormalRandom(mean, stdDev);
-	    if (minVelocityIsZero && randomSample < 0) {
-		randomSample = 0;
-            }
-            if (randomSample > planningVelocity){
-                planningVelocityOrMore++;
-            }
-            simulatedResults.push(randomSample);
-        }
-
-        simulatedResults.sort((a, b) => a - b);
-
-        // Get percentile
-        const percentileIndex = Math.floor(iterations * percentageConfdence);
-        const percentileValue = simulatedResults[percentileIndex].toFixed(2);
-
-        document.getElementById("results").innerText = `${(1 - percentageConfdence)* 100}% chance of : ${percentileValue} or more`;
-
-	document.getElementById("planningSuccessProbability").innerText = ` ${planningVelocityOrMore/iterations *100}%  chance you will get ${planningVelocity} or more items done in a sprint`;
-
-        // Draw the probability distribution chart and the line marking the 15th percentile
-        drawChart(simulatedResults, percentileValue, percentageConfdence);
-    }
-
-    function drawChart(data, percentileValue, confidence) {
-        // Create bins for histogram
-        const counts = {};
-        data.forEach(function (value) {
-            const roundedValue = Math.round(value); // Round to nearest integer for grouping
-            counts[roundedValue] = counts[roundedValue] ? counts[roundedValue] + 1 : 1;
-        });
-
-        let labels = Object.keys(counts).map(Number); // Convert labels to numbers
-        labels.sort((a, b) => a - b); // Sort labels numerically
-        const values = labels.map(label => counts[label]); // Re-map values according to sorted labels
-
-        // Find the closest label to the percentile value
-        const closestLabel = labels.reduce((prev, curr) => 
-            Math.abs(curr - percentileValue) < Math.abs(prev - percentileValue) ? curr : prev
-        );
-
-        const closestLabelIndex = labels.indexOf(closestLabel); // Get index of the closest label
-
-        // Destroy the previous chart if it exists
-        if (chartInstance) {
-            chartInstance.destroy();
-        }
-
-        // Create a new Chart
-        const ctx = document.getElementById('velocityChart').getContext('2d');
-        chartInstance = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Frequency of Velocity',
-                    data: values,
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Velocity'
-                        }
-                    },
-                    y: {
-                        title: {
-                            display: true,
-                            text: 'Frequency'
-                        },
-                        beginAtZero: true
-                    }
-                },
-                plugins: {
-                    annotation: {
-                        annotations: {
-                            line1: {
-                                type: 'line',
-                                yMin: 0,
-                                yMax: Math.max(...values),
-                                xMin: closestLabelIndex,
-                                xMax: closestLabelIndex,
-                                borderColor: 'red',
-                                borderWidth: 2,
-                                label: {
-                                    content: `${confidence * 100}th Percentile (${percentileValue})`,
-                                    enabled: true,
-                                    position: 'top'
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-</script>
-
+<!-- External JavaScript -->
+<script src="velocity.js"></script>
+<script src="NormalDistribution.js"></script>
 </body>
 </html>
