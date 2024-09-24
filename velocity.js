@@ -1,5 +1,6 @@
 
-let chartInstance;
+let chartInstanceVel;
+let chartInstanceRel;
 
 function updateSliderValue() {
     const slider = document.getElementById('percentageSlider');
@@ -17,6 +18,25 @@ function calcHowManySprints(prodBacklogSize, velocityDist) {
     return sprintsToDeliver;
 }
 
+function DestroythePreviousChart(){
+    if (chartInstanceRel) {
+        chartInstanceRel.destroy();
+        chartInstanceRel = null;
+    }
+    if (chartInstanceVel) {
+        chartInstanceVel.destroy();
+        chartInstanceVel = null;
+    }
+
+    // Remove the canvas element or clear the chart container
+    const chartContainers = ['velocityChart', 'releaseChart'];
+    chartContainers.forEach(chartID => {
+        const chartContainer = document.getElementById(chartID);
+        if (chartContainer) {
+            chartContainer.innerHTML = ''; // Clear the chart container
+        }
+    });
+}
 
 function runMonteCarlo() {
     const velocitiesInput = document.getElementById("velocities").value;
@@ -28,6 +48,8 @@ function runMonteCarlo() {
 
     let minVelocityIsZero = false;
 
+
+    DestroythePreviousChart();
 
 
     if (document.getElementById("setZero").checked) {
@@ -77,11 +99,11 @@ function runMonteCarlo() {
 
     // Draw the probability distribution chart and the line marking the percentile
 
-    drawChart('velocityChart', simulatedSprintResults, [],percentileValue, percentageConfidence,'distributions of Velocity','velocity');
-    drawChart('releaseChart', simulatedReleaseResults, deliveryBy, 1-percentageConfidence, 'distribution of total sprints','sprints');
+    drawVelChart('velocityChart', simulatedSprintResults, percentileValue, percentageConfidence,'distributions of Velocity','velocity');
+    drawRelChart('releaseChart', simulatedReleaseResults, deliveryBy, 1-percentageConfidence, 'distribution of total sprints','sprints');
 }
 
-function drawChart(chartID, data, percentileValue, confidence,chartlabel,xlabel) {
+function drawVelChart( chartID, data, percentileValue, confidence,chartlabel,xlabel) {
     // Create bins for histogram
     const counts = {};
     data.forEach(function (value) {
@@ -117,17 +139,114 @@ function drawChart(chartID, data, percentileValue, confidence,chartlabel,xlabel)
 
     const chartContainer = document.getElementById(chartID);
     chartContainer.innerHTML = `<canvas id= '${chartID}' ></canvas>`;
-    var ctx = document.getElementById(chartID).getContext('2d');
+    const ctx = document.getElementById(chartID).getContext('2d');
+
+    // Create a new Chart
+     chartInstanceVel = new Chart(ctx, {
+        data: {
+            labels: labels,
+            datasets: [
+                {label: chartlabel,
+                    type: 'bar',
+                    data: values,
+                    backgroundColor: 'rgba(88, 164, 176, 0.2)', // Moonstone color
+                    borderColor: 'rgba(88, 164, 176, 1)',
+                    borderWidth: 1
+                },
+                {
+                    type: 'line',
+                    label: 'Cumulative Percentage',
+                    data: cumulativePercentageData,
+                    backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    fill: false,
+                    yAxisID: 'y1',
+                }
+            ]
+
+        },
+        options: {
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: xlabel
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Frequency'
+                    },
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                annotation: {
+                    annotations: {
+                        line1: {
+                            type: 'line',
+                            yMin: 0,
+                            yMax: Math.max(...values),
+                            xMin: closestLabelIndex,
+                            xMax: closestLabelIndex,
+                            borderColor: 'red',
+                            borderWidth: 2,
+                            label: {
+                                content: `${(1- confidence) * 100}th Percentile (${percentileValue})`,
+                                enabled: true,
+                                position: 'top'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function drawRelChart(chartID, data, percentileValue, confidence,chartlabel,xlabel) {
+    // Create bins for histogram
+    const counts = {};
+    data.forEach(function (value) {
+        const roundedValue = Math.round(value); // Round to nearest integer for grouping
+        counts[roundedValue] = counts[roundedValue] ? counts[roundedValue] + 1 : 1;
+    });
+
+    let labels = Object.keys(counts).map(Number); // Convert labels to numbers
+    labels.sort((a, b) => a - b); // Sort labels numerically
+    const values = labels.map(label => counts[label]); // Re-map values according to sorted labels
+
+    // Find the closest label to the percentile value
+    const closestLabel = labels.reduce((prev, curr) =>
+        Math.abs(curr - percentileValue) < Math.abs(prev - percentileValue) ? curr : prev
+    );
+
+    const closestLabelIndex = labels.indexOf(closestLabel); // Get index of the closest label
 
 
-    // Destroy the previous chart if it exists
-    if (ctx.chart) {
-        ctx.chart.destroy();
-    }
+    // Compute cumulative frequencies
+    const cumulativeFrequencies = [];
+    let cumulativeSum = 0;
+    values.forEach(function(value) {
+        cumulativeSum += value;
+        cumulativeFrequencies.push(cumulativeSum);
+    });
+
+    // Compute cumulative percentages
+    const totalDataPoints = data.length;
+    const cumulativePercentageData = cumulativeFrequencies.map(function(cf) {
+        return (cf / totalDataPoints) * 100;
+    });
+
+    const chartContainer = document.getElementById(chartID);
+    chartContainer.innerHTML = `<canvas id= '${chartID}' ></canvas>`;
+    const ctx = document.getElementById(chartID).getContext('2d');
+
 
 
     // Create a new Chart
-     chartInstance = new Chart(ctx, {
+     chartInstanceRel = new Chart(ctx, {
         data: {
             labels: labels,
             datasets: [
