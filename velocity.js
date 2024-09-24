@@ -193,7 +193,7 @@ function drawVelChart( chartID, data, percentileValue, confidence,chartlabel,xla
                             borderColor: 'red',
                             borderWidth: 2,
                             label: {
-                                content: `${(1- confidence) * 100}th Percentile (${percentileValue})`,
+                                content: `${(confidence) * 100}th Percentile (${percentileValue})`,
                                 enabled: true,
                                 position: 'top'
                             }
