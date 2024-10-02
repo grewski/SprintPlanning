@@ -12,12 +12,20 @@
 </head>
 <body>
 
-<h1>Monte Carlo Simulation for Scrum Team Velocity</h1>
-
+    <h1>Monte Carlo Simulation for Scrum Team Planning and Forecasting</h1>
+    <p> This tool is intended to help scrum teams plan and forecast more effectively using Monte Carlo simulation.
+        It works for either throughput or velocity data. The simulation uses a normal distribution model based on the data you enter.
+        The model will work more effectively with a larger number of data points. </p>
+    <p> The tool will provide you with two key pieces of information: </p>
+    <ul>
+        <li>The likelihood of delivering the items you are planning for the sprint</li>
+        <li>Based on the size of your product backlog, when you are likely to deliver it, depending on the confidence level you choose</li>
+    </ul>
+    <p>This model provides forecasts based on statistical models to help teams have more informed planning conversations. It does not provide any guarantee of delivery.</p>
 <label for="velocities">Enter historic velocities (comma-separated) or throughputs:</label>
 <textarea id="velocities" rows="4" placeholder="e.g., 4,5,3,4,5,7"></textarea>
 
-<label for="prodBacklog">How many units of work ar eremaining in your product backlog?</label>
+<label for="prodBacklog">How many units of work are remaining in your product backlog?</label>
 <input type="number" id="prodBacklog" value="45">
 
 <label for="planning">How many units of work are you planning for your next sprint?</label>
@@ -26,7 +34,7 @@
 <label for="iterations">Enter number of simulations (e.g., 100000):</label>
 <input type="number" id="iterations" value="100000">
 
-<label for="percentageSlider">Select percentage: </label>
+<label for="percentageSlider">Select percentage confidence required: </label>
 <input type="range" id="percentageSlider" min="0" max="100" value="85" oninput="updateSliderValue()">
 <span id="sliderValue">85%</span>
 
@@ -51,7 +59,17 @@
 
 
 <div id="debug"></div>
+<p>This tool was created by <a href="https://paulgrew.com" target="_blank">Paul Grew</a>. Visit <a href="https://paulgrew.com" target="_blank">paulgrew.com</a> for more information.</p>
 
+<p>
+
+    Disclaimer:
+
+    This tool is designed to assist with forecasting sprint velocity and release timelines based on user-provided inputs and simulations. The results generated are purely for informational and estimation purposes, and should not be regarded as guarantees or precise predictions.
+
+    While the tool uses statistical methods such as Monte Carlo simulations to provide projections, the accuracy of these projections is dependent on the quality and relevance of the data provided by the user. Variability in real-world factors such as team performance, changing scope, and unforeseen delays may affect actual outcomes. Therefore, users should exercise caution and not rely solely on the results from this tool for critical decision-making.
+
+    The creators of this tool disclaim any liability for losses or damages, direct or indirect, arising from the use of this tool. Users are encouraged to consult with project management professionals or conduct further analysis when making important project or sprint planning decisions.</p>
 <!-- External JavaScript -->
 <script src="velocity.js"></script>
 <script src="NormalDistribution.js"></script>
