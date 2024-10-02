@@ -92,7 +92,7 @@ function runMonteCarlo() {
     const deliveryBy = simulatedReleaseResults[percentileRelIndex].toFixed(2);
 
 
-    document.getElementById("sprintResults").innerText = `${(1 - percentageConfidence) * 100}% chance of: ${percentileValue} or more`;
+    document.getElementById("sprintResults").innerText = `${(1 - percentageConfidence) * 100}% chance of at least : ${percentileValue} done in a sprint`;
     document.getElementById("releaseResults").innerText = `${(1 - percentageConfidence) * 100}% chance of delivering by: ${deliveryBy} sprints`;
 
     document.getElementById("planningSuccessProbability").innerText = `${(planningVelocityOrMore / iterations) * 100}% chance you will get ${planningVelocity} or more items done in a sprint`;
@@ -104,6 +104,7 @@ function runMonteCarlo() {
 }
 
 function drawVelChart( chartID, data, percentileValue, confidence,chartlabel,xlabel) {
+
     // Create bins for histogram
     const counts = {};
     data.forEach(function (value) {
