@@ -3,75 +3,127 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monte Carlo Simulation for Scrum Team Sprint Planning and Release Forecasting</title>
-    <!-- External CSS -->
-    <link rel="stylesheet" type="text/css" href="velocity.css">
-    <!-- External Libraries -->
+    <meta name="description" content="A Monte Carlo sprint and release forecaster by Grewski.">
+    <title>Grewski — Monte Carlo Forecaster</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="icon" href="grewski-symbol.svg" type="image/svg+xml">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="velocity.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.0.2"></script>
 </head>
 <body>
+    <main class="app-shell">
+        <header class="topbar">
+            <a class="brand" href="https://paulgrew.com" target="_blank" rel="noreferrer" aria-label="Grewski home">
+                <img src="grewski-wordmark.svg" alt="Grewski">
+            </a>
+            <div class="title-block">
+                <p class="eyebrow"><i></i> Evidence over estimates</p>
+                <h1>Monte Carlo Forecaster</h1>
+            </div>
+            <details class="about">
+                <summary>About this tool</summary>
+                <div class="about-popover">
+                    <strong>Forecast with confidence, not certainty.</strong>
+                    <p>Use historic throughput or velocity to explore sprint and release outcomes. More data points usually produce a more useful model.</p>
+                    <p class="fine-print">Results are statistical estimates, not delivery guarantees. Changing scope, team conditions and other real-world factors can affect outcomes.</p>
+                </div>
+            </details>
+        </header>
 
-    <h1>Monte Carlo Simulation for Scrum Team Planning and Forecasting</h1>
-    <p> This tool is intended to help scrum teams plan and forecast more effectively using Monte Carlo simulation.
-        It works for either throughput or velocity data. The simulation uses a normal distribution model based on the data you enter.
-        The model will work more effectively with a larger number of data points. </p>
-    <p> The tool will provide you with two key pieces of information: </p>
-    <ul>
-        <li>The likelihood of delivering the items you are planning for the sprint</li>
-        <li>Based on the size of your product backlog, when you are likely to deliver it, depending on the confidence level you choose</li>
-    </ul>
-    <p>This model provides forecasts based on statistical models to help teams have more informed planning conversations. It does not provide any guarantee of delivery.</p>
-<label for="velocities">Enter historic velocities (comma-separated) or throughputs:</label>
-<textarea id="velocities" rows="4" placeholder="e.g., 4,5,3,4,5,7"></textarea>
+        <section class="workspace">
+            <aside class="control-panel" aria-label="Simulation inputs">
+                <div class="panel-heading">
+                    <span class="step">01</span>
+                    <div><p>Simulation setup</p><span>Enter your knowns</span></div>
+                </div>
 
-<label for="prodBacklog">How many units of work are remaining in your product backlog?</label>
-<input type="number" id="prodBacklog" value="45">
+                <div class="field field-wide">
+                    <label for="velocities">Historic results <span>comma separated</span></label>
+                    <textarea id="velocities" rows="2" placeholder="e.g. 4, 5, 3, 4, 5, 7">4, 5, 3, 4, 5, 7</textarea>
+                </div>
 
-<label for="planning">How many units of work are you planning for your next sprint?</label>
-<input type="number" id="planning" value="45">
+                <div class="field-grid">
+                    <div class="field">
+                        <label for="prodBacklog">Backlog remaining</label>
+                        <div class="number-input"><input type="number" id="prodBacklog" value="45" min="1"><span>units</span></div>
+                    </div>
+                    <div class="field">
+                        <label for="planning">Next sprint plan</label>
+                        <div class="number-input"><input type="number" id="planning" value="5" min="0"><span>units</span></div>
+                    </div>
+                    <div class="field">
+                        <label for="iterations">Simulations</label>
+                        <select id="iterations">
+                            <option value="10000">10,000</option>
+                            <option value="50000">50,000</option>
+                            <option value="100000" selected>100,000</option>
+                        </select>
+                    </div>
+                    <label class="toggle-field" for="setZero">
+                        <span><strong>Zero floor</strong><small>Prevent negative results</small></span>
+                        <input type="checkbox" id="setZero" checked>
+                        <span class="toggle" aria-hidden="true"></span>
+                    </label>
+                </div>
 
-<label for="iterations">Enter number of simulations (e.g., 100000):</label>
-<input type="number" id="iterations" value="100000">
+                <div class="confidence-field">
+                    <div class="confidence-label">
+                        <label for="percentageSlider">Confidence level</label>
+                        <output id="sliderValue" for="percentageSlider">85%</output>
+                    </div>
+                    <input type="range" id="percentageSlider" min="50" max="99" value="85" oninput="updateSliderValue()">
+                    <div class="range-labels"><span>50%</span><span>More certainty</span><span>99%</span></div>
+                </div>
 
-<label for="percentageSlider">Select percentage confidence required: </label>
-<input type="range" id="percentageSlider" min="0" max="100" value="85" oninput="updateSliderValue()">
-<span id="sliderValue">85%</span>
+                <button id="runButton" type="button" onclick="runMonteCarlo()">
+                    <span>Run forecast</span><span aria-hidden="true">→</span>
+                </button>
+                <p id="formError" class="form-error" role="alert"></p>
+            </aside>
 
-<br><br>
-<div class="checkbox-container">
-    <input type="checkbox" id="setZero">
-    <label for="setZero">Set minimum value to 0? (i.e., prevent negative velocity):</label>
-</div>
-<br><br>
+            <section class="results-panel" aria-label="Forecast results">
+                <div class="results-heading">
+                    <div><span class="step">02</span><div><p>Forecast output</p><span>What the data is telling you</span></div></div>
+                    <span class="model-pill"><i></i> Normal distribution model</span>
+                </div>
 
-<button onclick="runMonteCarlo()">Run Simulation</button><br><br>
+                <div class="metric-grid" aria-live="polite">
+                    <article class="metric primary">
+                        <p>Sprint plan likelihood</p>
+                        <strong id="planningMetric">—</strong>
+                        <span id="planningSuccessProbability">Run the model to assess your plan</span>
+                    </article>
+                    <article class="metric">
+                        <p>Likely sprint output</p>
+                        <strong id="sprintMetric">—</strong>
+                        <span id="sprintResults">at your selected confidence</span>
+                    </article>
+                    <article class="metric">
+                        <p>Release horizon</p>
+                        <strong id="releaseMetric">—</strong>
+                        <span id="releaseResults">at your selected confidence</span>
+                    </article>
+                </div>
 
-<div id="planningSuccessProbability"></div>
-<div id="sprintResults"></div>
-<div id="releaseResults"></div>
+                <div class="chart-grid">
+                    <article class="chart-card">
+                        <div class="chart-heading"><div><p>Sprint distribution</p><span>Simulated output frequency</span></div><span class="legend-key">Cumulative %</span></div>
+                        <div class="chart-wrap"><canvas id="velocityChart"></canvas></div>
+                    </article>
+                    <article class="chart-card">
+                        <div class="chart-heading"><div><p>Release distribution</p><span>Simulated sprint count</span></div><span class="legend-key">Cumulative %</span></div>
+                        <div class="chart-wrap"><canvas id="releaseChart"></canvas></div>
+                    </article>
+                </div>
+            </section>
+        </section>
 
-<div id="chart-container">
-    <canvas id="velocityChart"></canvas>
-    <canvas id="releaseChart"></canvas>
-
-</div>
-
-
-<div id="debug"></div>
-<p>This tool was created by <a href="https://paulgrew.com" target="_blank">Paul Grew</a>. Visit <a href="https://paulgrew.com" target="_blank">paulgrew.com</a> for more information.</p>
-
-<p>
-
-    Disclaimer:
-
-    This tool is designed to assist with forecasting sprint velocity and release timelines based on user-provided inputs and simulations. The results generated are purely for informational and estimation purposes, and should not be regarded as guarantees or precise predictions.
-
-    While the tool uses statistical methods such as Monte Carlo simulations to provide projections, the accuracy of these projections is dependent on the quality and relevance of the data provided by the user. Variability in real-world factors such as team performance, changing scope, and unforeseen delays may affect actual outcomes. Therefore, users should exercise caution and not rely solely on the results from this tool for critical decision-making.
-
-    The creators of this tool disclaim any liability for losses or damages, direct or indirect, arising from the use of this tool. Users are encouraged to consult with Scrum professionals or conduct further analysis when making important project or sprint planning decisions.</p>
-<!-- External JavaScript -->
-<script src="velocity.js"></script>
-<script src="NormalDistribution.js"></script>
+        <footer><span>GREWSKI / AGILE DELIVERY</span><span>Built by <a href="https://paulgrew.com" target="_blank" rel="noreferrer">Paul Grew</a></span></footer>
+    </main>
+    <script src="NormalDistribution.js"></script>
+    <script src="velocity.js"></script>
 </body>
 </html>

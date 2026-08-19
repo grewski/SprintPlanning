@@ -1,203 +1,180 @@
-
 let chartInstanceVel;
 let chartInstanceRel;
 
+Chart.defaults.font.family = "Inter, Arial, Helvetica, sans-serif";
+Chart.defaults.color = "#737373";
+
 function updateSliderValue() {
-    const slider = document.getElementById('percentageSlider');
-    const sliderValue = document.getElementById('sliderValue');
-    sliderValue.innerText = slider.value + '%';
+    const slider = document.getElementById("percentageSlider");
+    document.getElementById("sliderValue").value = `${slider.value}%`;
+    const progress = ((slider.value - slider.min) / (slider.max - slider.min)) * 100;
+    slider.style.background = `linear-gradient(90deg, #c7ff00 0 ${progress}%, #3a404b ${progress}% 100%)`;
 }
 
-function calcHowManySprints(prodBacklogSize, velocityDist) {
-    let remainingItemstoDeliver = prodBacklogSize;
-    let sprintsToDeliver =0;
-    while(remainingItemstoDeliver >0){
-        remainingItemstoDeliver -= velocityDist.generate();
-        sprintsToDeliver ++;
+function calcHowManySprints(backlogSize, velocityDist, useZeroFloor) {
+    let remaining = backlogSize;
+    let sprints = 0;
+    const safetyLimit = 10000;
+
+    while (remaining > 0 && sprints < safetyLimit) {
+        const generated = velocityDist.generate();
+        remaining -= useZeroFloor ? Math.max(0, generated) : generated;
+        sprints++;
     }
-    return sprintsToDeliver;
+    return sprints;
 }
 
-function DestroythePreviousChart(){
-    if (chartInstanceRel) {
-        chartInstanceRel.destroy();
-        chartInstanceRel = null;
-    }
-    if (chartInstanceVel) {
-        chartInstanceVel.destroy();
-        chartInstanceVel = null;
-    }
-
-    // Remove the canvas element or clear the chart container
-    const chartContainers = ['velocityChart', 'releaseChart'];
-    chartContainers.forEach(chartID => {
-        const chartContainer = document.getElementById(chartID);
-        if (chartContainer) {
-            chartContainer.innerHTML = ''; // Clear the chart container
-        }
-    });
+function destroyPreviousCharts() {
+    if (chartInstanceRel) chartInstanceRel.destroy();
+    if (chartInstanceVel) chartInstanceVel.destroy();
+    chartInstanceRel = null;
+    chartInstanceVel = null;
 }
 
 function runMonteCarlo() {
-    const velocitiesInput = document.getElementById("velocities").value;
-    const iterations = parseInt(document.getElementById("iterations").value);
-    const velocities = velocitiesInput.split(',').map(Number).filter(v => !isNaN(v));
-    const percentageConfidence = (100 - document.getElementById("percentageSlider").value) / 100;
-    const planningVelocity = parseInt(document.getElementById("planning").value);
-    const prodBacklogSize = parseInt(document.getElementById("prodBacklog").value);
+    const velocities = document.getElementById("velocities").value
+        .split(",")
+        .map(value => Number(value.trim()))
+        .filter(Number.isFinite);
+    const iterations = Number.parseInt(document.getElementById("iterations").value, 10);
+    const confidence = Number(document.getElementById("percentageSlider").value);
+    const sprintPlan = Number(document.getElementById("planning").value);
+    const backlogSize = Number(document.getElementById("prodBacklog").value);
+    const useZeroFloor = document.getElementById("setZero").checked;
+    const error = document.getElementById("formError");
 
-    let minVelocityIsZero = false;
-
-
-    DestroythePreviousChart();
-
-
-    if (document.getElementById("setZero").checked) {
-        minVelocityIsZero = true;
-    }
-
-    if (velocities.length === 0 || iterations <= 0) {
-        document.getElementById("results").innerText = "Please provide valid velocities and a number of iterations.";
+    if (velocities.length < 2 || velocities.some(value => value < 0) || iterations <= 0 || sprintPlan < 0 || backlogSize <= 0) {
+        error.textContent = "Add at least two valid historic results and positive planning values.";
         return;
     }
 
+    error.textContent = "";
+    destroyPreviousCharts();
 
-    const simulatedSprintResults = [];
-    const simulatedReleaseResults = [];
-    let planningVelocityOrMore = 0;
-
+    const sprintResults = [];
+    const releaseResults = [];
     const velocityDist = new NormalDistribution(velocities);
-    // Generate random samples using normal distribution
-    for (let i = 0; i < iterations; i++) {
-        simulatedReleaseResults.push(calcHowManySprints(prodBacklogSize,velocityDist));
+    let planMet = 0;
 
-        let randomSample = velocityDist.generate();
-        if (minVelocityIsZero && randomSample < 0) {
-            randomSample = 0;
-        }
-        if (randomSample > planningVelocity) {
-            planningVelocityOrMore++;
-        }
-        simulatedSprintResults.push(randomSample);
+    for (let i = 0; i < iterations; i++) {
+        releaseResults.push(calcHowManySprints(backlogSize, velocityDist, useZeroFloor));
+        const sample = useZeroFloor ? Math.max(0, velocityDist.generate()) : velocityDist.generate();
+        if (sample >= sprintPlan) planMet++;
+        sprintResults.push(sample);
     }
 
-    simulatedSprintResults.sort((a, b) => a - b);
-    simulatedReleaseResults.sort((a, b) => a - b);
+    sprintResults.sort((a, b) => a - b);
+    releaseResults.sort((a, b) => a - b);
 
-    // Get percentile
-    const percentileIndex = Math.floor(iterations * percentageConfidence);
-    const percentileValue = simulatedSprintResults[percentileIndex].toFixed(2);
+    const sprintPercentile = sprintResults[Math.floor(iterations * ((100 - confidence) / 100))];
+    const deliveryBy = releaseResults[Math.min(iterations - 1, Math.floor(iterations * (confidence / 100)))];
+    const planProbability = (planMet / iterations) * 100;
 
-    const percentileRelIndex = Math.floor(iterations * (1-percentageConfidence));
-    const deliveryBy = simulatedReleaseResults[percentileRelIndex].toFixed(2);
+    document.getElementById("planningMetric").textContent = `${formatPercent(planProbability)}%`;
+    document.getElementById("planningSuccessProbability").textContent = `chance of completing ${formatNumber(sprintPlan)}+ units`;
+    document.getElementById("sprintMetric").textContent = `${formatNumber(sprintPercentile)} units`;
+    document.getElementById("sprintResults").textContent = `${confidence}% chance of at least this much`;
+    document.getElementById("releaseMetric").textContent = `${Math.ceil(deliveryBy)} sprints`;
+    document.getElementById("releaseResults").textContent = `${confidence}% chance of delivery by then`;
 
-
-    document.getElementById("sprintResults").innerText = `${(1 - percentageConfidence) * 100}% chance of at least : ${percentileValue} done in a sprint`;
-    document.getElementById("releaseResults").innerText = `${(1 - percentageConfidence) * 100}% chance of delivering by: ${deliveryBy} sprints`;
-
-    document.getElementById("planningSuccessProbability").innerText = `${(planningVelocityOrMore / iterations) * 100}% chance you will get ${planningVelocity} or more items done in a sprint`;
-
-    // Draw the probability distribution chart and the line marking the percentile
-
-    drawVelChart('velocityChart', simulatedSprintResults, percentileValue, percentageConfidence,'distributions of Velocity','velocity');
-    drawRelChart('releaseChart', simulatedReleaseResults, deliveryBy, 1-percentageConfidence, 'distribution of total sprints','sprints');
+    chartInstanceVel = drawChart("velocityChart", sprintResults, sprintPercentile, "Output", "Units");
+    chartInstanceRel = drawChart("releaseChart", releaseResults, deliveryBy, "Release", "Sprints");
 }
 
-function drawVelChart( chartID, data, percentileValue, confidence,chartlabel,xlabel) {
+function formatNumber(value) {
+    return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
 
-    // Create bins for histogram
+function formatPercent(value) {
+    return value < 10 ? value.toFixed(1) : Math.round(value);
+}
+
+function drawChart(chartId, data, percentileValue, datasetLabel, xLabel) {
     const counts = {};
-    data.forEach(function (value) {
-        const roundedValue = Math.round(value); // Round to nearest integer for grouping
-        counts[roundedValue] = counts[roundedValue] ? counts[roundedValue] + 1 : 1;
+    data.forEach(value => {
+        const rounded = Math.max(0, Math.round(value));
+        counts[rounded] = (counts[rounded] || 0) + 1;
     });
 
-    let labels = Object.keys(counts).map(Number); // Convert labels to numbers
-    labels.sort((a, b) => a - b); // Sort labels numerically
-    const values = labels.map(label => counts[label]); // Re-map values according to sorted labels
+    const labels = Object.keys(counts).map(Number).sort((a, b) => a - b);
+    const frequencies = labels.map(label => counts[label]);
+    const cumulative = [];
+    let runningTotal = 0;
+    frequencies.forEach(value => {
+        runningTotal += value;
+        cumulative.push((runningTotal / data.length) * 100);
+    });
 
-    // Find the closest label to the percentile value
-    const closestLabel = labels.reduce((prev, curr) =>
-        Math.abs(curr - percentileValue) < Math.abs(prev - percentileValue) ? curr : prev
+    const marker = labels.reduce((closest, current) =>
+        Math.abs(current - percentileValue) < Math.abs(closest - percentileValue) ? current : closest
     );
 
-    const closestLabelIndex = labels.indexOf(closestLabel); // Get index of the closest label
-
-
-    // Compute cumulative frequencies
-    const cumulativeFrequencies = [];
-    let cumulativeSum = 0;
-    values.forEach(function(value) {
-        cumulativeSum += value;
-        cumulativeFrequencies.push(cumulativeSum);
-    });
-
-    // Compute cumulative percentages
-    const totalDataPoints = data.length;
-    const cumulativePercentageData = cumulativeFrequencies.map(function(cf) {
-        return (cf / totalDataPoints) * 100;
-    });
-
-    const chartContainer = document.getElementById(chartID);
-    chartContainer.innerHTML = `<canvas id= '${chartID}' ></canvas>`;
-    const ctx = document.getElementById(chartID).getContext('2d');
-
-    // Create a new Chart
-     chartInstanceVel = new Chart(ctx, {
+    return new Chart(document.getElementById(chartId).getContext("2d"), {
         data: {
-            labels: labels,
+            labels,
             datasets: [
-                {label: chartlabel,
-                    type: 'bar',
-                    data: values,
-                    backgroundColor: 'rgba(88, 164, 176, 0.2)', // Moonstone color
-                    borderColor: 'rgba(88, 164, 176, 1)',
-                    borderWidth: 1
+                {
+                    label: datasetLabel,
+                    type: "bar",
+                    data: frequencies,
+                    backgroundColor: "rgba(0, 87, 255, .18)",
+                    borderColor: "#0057ff",
+                    borderWidth: 1,
+                    borderRadius: 2,
+                    yAxisID: "y"
                 },
                 {
-                    type: 'line',
-                    label: 'Cumulative Percentage',
-                    data: cumulativePercentageData,
-                    backgroundColor: 'rgba(255, 99, 132, 0.5)',
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    fill: false,
-                    yAxisID: 'y1',
+                    label: "Cumulative %",
+                    type: "line",
+                    data: cumulative,
+                    borderColor: "#ff3d00",
+                    backgroundColor: "#ff3d00",
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: .28,
+                    yAxisID: "y1"
                 }
             ]
-
         },
         options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 350 },
+            interaction: { intersect: false, mode: "index" },
             scales: {
                 x: {
-                    title: {
-                        display: true,
-                        text: xlabel
-                    }
+                    grid: { display: false },
+                    border: { display: false },
+                    title: { display: true, text: xLabel, font: { size: 9, weight: "600" } },
+                    ticks: { font: { size: 8 }, maxTicksLimit: 12 }
                 },
                 y: {
-                    title: {
-                        display: true,
-                        text: 'Frequency'
-                    },
-                    beginAtZero: true
+                    beginAtZero: true,
+                    grid: { color: "#e9e9e9" },
+                    border: { display: false },
+                    ticks: { display: false }
+                },
+                y1: {
+                    beginAtZero: true,
+                    max: 100,
+                    position: "right",
+                    grid: { display: false },
+                    border: { display: false },
+                    ticks: { callback: value => `${value}%`, font: { size: 8 }, maxTicksLimit: 5 }
                 }
             },
             plugins: {
+                legend: { display: false },
+                tooltip: { displayColors: false, padding: 9 },
                 annotation: {
                     annotations: {
-                        line1: {
-                            type: 'line',
-                            yMin: 0,
-                            yMax: Math.max(...values),
-                            xMin: closestLabelIndex,
-                            xMax: closestLabelIndex,
-                            borderColor: 'red',
-                            borderWidth: 2,
-                            label: {
-                                content: `${(confidence) * 100}th Percentile (${percentileValue})`,
-                                enabled: true,
-                                position: 'top'
-                            }
+                        confidenceLine: {
+                            type: "line",
+                            xMin: marker,
+                            xMax: marker,
+                            borderColor: "#191715",
+                            borderWidth: 1,
+                            borderDash: [4, 4]
                         }
                     }
                 }
@@ -206,106 +183,5 @@ function drawVelChart( chartID, data, percentileValue, confidence,chartlabel,xla
     });
 }
 
-function drawRelChart(chartID, data, percentileValue, confidence,chartlabel,xlabel) {
-    // Create bins for histogram
-    const counts = {};
-    data.forEach(function (value) {
-        const roundedValue = Math.round(value); // Round to nearest integer for grouping
-        counts[roundedValue] = counts[roundedValue] ? counts[roundedValue] + 1 : 1;
-    });
-
-    let labels = Object.keys(counts).map(Number); // Convert labels to numbers
-    labels.sort((a, b) => a - b); // Sort labels numerically
-    const values = labels.map(label => counts[label]); // Re-map values according to sorted labels
-
-    // Find the closest label to the percentile value
-    const closestLabel = labels.reduce((prev, curr) =>
-        Math.abs(curr - percentileValue) < Math.abs(prev - percentileValue) ? curr : prev
-    );
-
-    const closestLabelIndex = labels.indexOf(closestLabel); // Get index of the closest label
-
-
-    // Compute cumulative frequencies
-    const cumulativeFrequencies = [];
-    let cumulativeSum = 0;
-    values.forEach(function(value) {
-        cumulativeSum += value;
-        cumulativeFrequencies.push(cumulativeSum);
-    });
-
-    // Compute cumulative percentages
-    const totalDataPoints = data.length;
-    const cumulativePercentageData = cumulativeFrequencies.map(function(cf) {
-        return (cf / totalDataPoints) * 100;
-    });
-
-    const chartContainer = document.getElementById(chartID);
-    chartContainer.innerHTML = `<canvas id= '${chartID}' ></canvas>`;
-    const ctx = document.getElementById(chartID).getContext('2d');
-
-
-
-    // Create a new Chart
-     chartInstanceRel = new Chart(ctx, {
-        data: {
-            labels: labels,
-            datasets: [
-                {label: chartlabel,
-                    type: 'bar',
-                    data: values,
-                    backgroundColor: 'rgba(88, 164, 176, 0.2)', // Moonstone color
-                    borderColor: 'rgba(88, 164, 176, 1)',
-                    borderWidth: 1
-                },
-                {
-                    type: 'line',
-                    label: 'Cumulative Percentage',
-                    data: cumulativePercentageData,
-                    backgroundColor: 'rgba(255, 99, 132, 0.5)',
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    fill: false,
-                    yAxisID: 'y1',
-                }
-            ]
-
-        },
-        options: {
-            scales: {
-                x: {
-                    title: {
-                        display: true,
-                        text: xlabel
-                    }
-                },
-                y: {
-                    title: {
-                        display: true,
-                        text: 'Frequency'
-                    },
-                    beginAtZero: true
-                }
-            },
-            plugins: {
-                annotation: {
-                    annotations: {
-                        line1: {
-                            type: 'line',
-                            yMin: 0,
-                            yMax: Math.max(...values),
-                            xMin: closestLabelIndex,
-                            xMax: closestLabelIndex,
-                            borderColor: 'red',
-                            borderWidth: 2,
-                            label: {
-                                content: `${confidence * 100}th Percentile (${percentileValue})`,
-                                enabled: true,
-                                position: 'top'
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
+updateSliderValue();
+runMonteCarlo();
