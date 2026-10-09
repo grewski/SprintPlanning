@@ -40,19 +40,41 @@
                     <div><p>Simulation setup</p><span>Enter your knowns</span></div>
                 </div>
 
+                <fieldset class="mode-switch">
+                    <legend>Forecast mode</legend>
+                    <label><input type="radio" name="forecastMode" value="throughput" checked onchange="changeForecastMode()"> Throughput</label>
+                    <label><input type="radio" name="forecastMode" value="velocity" onchange="changeForecastMode()"> Velocity</label>
+                </fieldset>
+                <p id="modeHelp" class="setup-help">Count completed issues per sprint.</p>
+                <div class="field"><label id="forecastDaysLabel" for="forecastDays">Throughput period (days)</label><input id="forecastDays" type="number" min="1" max="365" step="1" value="14"></div>
+
+                <details class="jira-import">
+                    <summary>Import Jira CSV</summary>
+                    <p><span id="jiraMeasure">Count issues resolved per sprint using Resolved.</span> Backlog includes every issue whose Status is not Done, regardless of date. Files stay in your browser.</p>
+                    <div class="field"><label for="jiraFile">Jira CSV file</label><input id="jiraFile" type="file" accept=".csv,text/csv"></div>
+                    <div id="jiraOptions" hidden>
+                <div class="field"><label id="jiraStartLabel" for="jiraStart">First period starts</label><input id="jiraStart" type="date"></div>
+                <p id="jiraStartHint" class="setup-help">Import a CSV to suggest a start date from its resolved issues, or enter a known start date.</p>
+                <button id="jiraSuggestStart" type="button" hidden>Use suggested start</button>
+
+                        <fieldset><legend id="jiraTypesLegend">Issue types for throughput and backlog</legend><div id="jiraTypes" class="issue-types"></div></fieldset>
+                        <p>Set the first historical start date here and the duration in setup. A 7-day period starting on Saturday ends on Friday. Import uses consecutive full periods from that start through today, excluding any unfinished final period. Periods with no resolutions count as zero. <span id="jiraUnitsHelp">Each issue counts as one, regardless of story points.</span></p>
+                        <p id="jiraDuration" role="status"></p>
+                        <button id="jiraApply" type="button">Apply import</button>
+                    </div>
+                    <p id="jiraSummary" role="status"></p>
+                    <p id="jiraError" class="form-error" role="alert"></p>
+                </details>
+
                 <div class="field field-wide">
-                    <label for="velocities">Historic results <span>comma separated</span></label>
+                    <label for="velocities"><b id="historyLabel">Historic throughput (issues)</b> <span>comma separated</span></label>
                     <textarea id="velocities" rows="2" placeholder="e.g. 4, 5, 3, 4, 5, 7">4, 5, 3, 4, 5, 7</textarea>
                 </div>
 
                 <div class="field-grid">
                     <div class="field">
                         <label for="prodBacklog">Backlog remaining</label>
-                        <div class="number-input"><input type="number" id="prodBacklog" value="45" min="1"><span>units</span></div>
-                    </div>
-                    <div class="field">
-                        <label for="planning">Next sprint plan</label>
-                        <div class="number-input"><input type="number" id="planning" value="5" min="0"><span>units</span></div>
+                        <div class="number-input"><input type="number" id="prodBacklog" value="45" min="0"><span id="backlogUnits">issues</span></div>
                     </div>
                     <div class="field">
                         <label for="iterations">Simulations</label>
@@ -62,12 +84,16 @@
                             <option value="100000" selected>100,000</option>
                         </select>
                     </div>
-                    <label class="toggle-field" for="setZero">
-                        <span><strong>Zero floor</strong><small>Prevent negative results</small></span>
-                        <input type="checkbox" id="setZero" checked>
-                        <span class="toggle" aria-hidden="true"></span>
-                    </label>
                 </div>
+
+                <div class="field">
+                    <label for="simulationModel">Simulation model</label>
+                    <select id="simulationModel" onchange="changeSimulationModel()">
+                        <option value="normal">Normal distribution</option>
+                        <option value="historical">Historical sampling (n-sided dice)</option>
+                    </select>
+                </div>
+                <p id="modelHelp" class="setup-help">Generates values from a normal distribution fitted to your history. Negative results count as zero.</p>
 
                 <div class="confidence-field">
                     <div class="confidence-label">
@@ -87,20 +113,15 @@
             <section class="results-panel" aria-label="Forecast results">
                 <div class="results-heading">
                     <div><span class="step">02</span><div><p>Forecast output</p><span>What the data is telling you</span></div></div>
-                    <span class="model-pill"><i></i> Normal distribution model</span>
+                    <span class="model-pill"><i></i> <span id="modelLabel">Normal distribution model</span></span>
+                </div>
+
+                <div class="chart-colour-controls">
+                    <label><input id="chartColours" type="checkbox" onchange="updateChartColours()"> Colour bars by cumulative %</label>
+                    <span id="chartColourLegend" hidden><span class="probability-red">Below 50%</span> · <span class="probability-amber">50–85%</span> · <span class="probability-green">Above 85%</span></span>
                 </div>
 
                 <div class="metric-grid" aria-live="polite">
-                    <article class="metric primary">
-                        <p>Sprint plan likelihood</p>
-                        <strong id="planningMetric">—</strong>
-                        <span id="planningSuccessProbability">Run the model to assess your plan</span>
-                    </article>
-                    <article class="metric">
-                        <p>Likely sprint output</p>
-                        <strong id="sprintMetric">—</strong>
-                        <span id="sprintResults">at your selected confidence</span>
-                    </article>
                     <article class="metric">
                         <p>Release horizon</p>
                         <strong id="releaseMetric">—</strong>
@@ -108,22 +129,39 @@
                     </article>
                 </div>
 
-                <div class="chart-grid">
-                    <article class="chart-card">
-                        <div class="chart-heading"><div><p>Sprint distribution</p><span>Simulated output frequency</span></div><span class="legend-key">Cumulative %</span></div>
-                        <div class="chart-wrap"><canvas id="velocityChart"></canvas></div>
-                    </article>
+                <div class="forecast-tabs" role="tablist" aria-label="Forecast view">
+                    <button id="distributionTab" role="tab" aria-selected="true" aria-controls="distributionPanel" type="button">Distribution</button>
+                    <button id="calendarTab" role="tab" aria-selected="false" aria-controls="calendarPanel" tabindex="-1" type="button">Calendar</button>
+                </div>
+                <div id="distributionPanel" class="chart-grid" role="tabpanel" aria-labelledby="distributionTab">
                     <article class="chart-card">
                         <div class="chart-heading"><div><p>Release distribution</p><span>Simulated sprint count</span></div><span class="legend-key">Cumulative %</span></div>
                         <div class="chart-wrap"><canvas id="releaseChart"></canvas></div>
                     </article>
                 </div>
+                <section id="calendarPanel" class="calendar-panel" role="tabpanel" aria-labelledby="calendarTab" hidden>
+                    <div class="calendar-settings">
+                        <label>Forecast starts<input id="forecastStart" type="date"></label>
+                    </div>
+                    <p>Chance of completing the backlog by the end of each day. Sprints use calendar days; the first sprint ends one sprint length after the start, counting the start date. Dates use the latest simulation.</p>
+                    <p class="calendar-legend"><span class="probability-red">Below 50%</span> · <span class="probability-amber">50–85%</span> · <span class="probability-green">Above 85%</span></p>
+                    <div class="calendar-navigation">
+                        <button id="previousMonth" type="button" aria-label="Previous four months">←</button>
+                        <h2 id="calendarMonth" aria-live="polite"></h2>
+                        <button id="nextMonth" type="button" aria-label="Next four months">→</button>
+                    </div>
+                    <p id="calendarMessage" role="status"></p>
+                    <div id="deliveryCalendar" class="calendar-months"></div>
+                </section>
             </section>
         </section>
 
         <footer><span>GREWSKI / AGILE DELIVERY</span><span>Built by <a href="https://paulgrew.com" target="_blank" rel="noreferrer">Paul Grew</a></span></footer>
     </main>
     <script src="NormalDistribution.js"></script>
+    <script src="HistoricalDistribution.js"></script>
+    <script src="delivery-calendar.js"></script>
     <script src="velocity.js"></script>
+    <script src="jira-import.js"></script>
 </body>
 </html>
